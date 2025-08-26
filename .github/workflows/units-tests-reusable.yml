@@ -28,7 +28,7 @@ env:
 jobs:
   unit-test:
     name: Unit tests
-    runs-on: tenki-standard-autoscale
+    runs-on: tenki-standard-medium-4c-8g
     env:
       COVERAGE_ENABLED: ${{ inputs.collectCoverage }}
     steps:

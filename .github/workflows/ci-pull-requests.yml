@@ -10,7 +10,7 @@ on:
 jobs:
   install-and-build:
     name: Install & Build
-    runs-on: tenki-standard-autoscale
+    runs-on: tenki-standard-medium-4c-8g
     env:
       NODE_OPTIONS: '--max-old-space-size=3072'
     outputs:
@@ -60,7 +60,7 @@ jobs:
     name: Bundle Size Check
     needs: install-and-build
     if: needs.install-and-build.outputs.frontend_changed == 'true'
-    runs-on: tenki-standard-autoscale
+    runs-on: tenki-standard-medium-4c-8g
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
