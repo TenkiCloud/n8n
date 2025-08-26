@@ -20,7 +20,7 @@ env:
 jobs:
   lint:
     name: Lint
-    runs-on: tenki-standard-large-8c-16g
+    runs-on: tenki-standard-large-plus-16c-32g
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
