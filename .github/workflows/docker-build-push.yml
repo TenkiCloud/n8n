@@ -10,8 +10,6 @@ env:
   NODE_OPTIONS: '--max-old-space-size=7168'
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
 
   workflow_call:
     inputs:
@@ -44,16 +42,14 @@ on:
 
   pull_request:
     types:
+      - synchronize
       - opened
-      - ready_for_review
-    paths:
-      - '.github/workflows/docker-build-push.yml'
-      - 'docker/images/n8n/Dockerfile'
+      - edited
 
 jobs:
   determine-build-context:
     name: Determine Build Context
-    runs-on: ubuntu-latest
+    runs-on: tenki-standard-autoscale
     outputs:
       release_type: ${{ steps.context.outputs.release_type }}
       n8n_version: ${{ steps.context.outputs.n8n_version }}
@@ -134,7 +130,7 @@ jobs:
               "platform": ["amd64"],
               "include": [{
                 "platform": "amd64",
-                "runner": "blacksmith-4vcpu-ubuntu-2204",
+                "runner": "tenki-standard-autoscale",
                 "docker_platform": "linux/amd64"
               }]
             }'
@@ -144,7 +140,7 @@ jobs:
               "platform": ["amd64", "arm64"],
               "include": [{
                 "platform": "amd64",
-                "runner": "blacksmith-4vcpu-ubuntu-2204",
+                "runner": "tenki-standard-autoscale",
                 "docker_platform": "linux/amd64"
               }, {
                 "platform": "arm64",
@@ -290,13 +286,13 @@ jobs:
           platforms: ${{ matrix.docker_platform }}
           provenance: true
           sbom: true
-          push: ${{ needs.determine-build-context.outputs.push_enabled == 'true' }}
+          push: false
           tags: ${{ steps.determine-tags.outputs.tags }}
 
   create_multi_arch_manifest:
     name: Create Multi-Arch Manifest
     needs: [determine-build-context, build-and-push-docker]
-    runs-on: ubuntu-latest
+    runs-on: tenki-standard-autoscale
     if: |
       needs.build-and-push-docker.result == 'success' &&
       needs.determine-build-context.outputs.push_enabled == 'true'
@@ -389,7 +385,7 @@ jobs:
   call-success-url:
     name: Call Success URL
     needs: [create_multi_arch_manifest]
-    runs-on: ubuntu-latest
+    runs-on: tenki-standard-autoscale
     if: needs.create_multi_arch_manifest.result == 'success' || needs.create_multi_arch_manifest.result == 'skipped'
     steps:
       - name: Call Success URL
