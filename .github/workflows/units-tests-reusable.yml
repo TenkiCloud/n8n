@@ -28,7 +28,7 @@ env:
 jobs:
   unit-test:
     name: Unit tests
-    runs-on: tenki-standard-large-plus-16c-32g
+    runs-on: ubuntu-latest
     env:
       COVERAGE_ENABLED: ${{ inputs.collectCoverage }}
     steps:
