@@ -20,9 +20,9 @@ on:
 permissions:
   contents: read
 
-env:
-  QBOT_SLACK_TOKEN: ${{ secrets.QBOT_SLACK_TOKEN }}
-  SLACK_CHANNEL_ID: C042WDXPTEZ #mission-security
+# env:
+#   QBOT_SLACK_TOKEN: ${{ secrets.QBOT_SLACK_TOKEN }}
+#   SLACK_CHANNEL_ID: C042WDXPTEZ #mission-security
 
 jobs:
   security_scan:
@@ -225,13 +225,13 @@ jobs:
 
           echo "slack_blocks=$BLOCKS_JSON" >> "$GITHUB_OUTPUT"
 
-      - name: Send Slack Notification
-        if: steps.process_results.outputs.vulnerabilities_found == 'true'
-        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.QBOT_SLACK_TOKEN }}
-          payload: |
-            channel: ${{ env.SLACK_CHANNEL_ID }}
-            text: "🚨 Trivy Scan: ${{ steps.process_results.outputs.critical_count }} Critical, ${{ steps.process_results.outputs.high_count }} High, ${{ steps.process_results.outputs.medium_count }} Medium, ${{ steps.process_results.outputs.low_count }} Low vulnerabilities found in ${{ inputs.image_ref }}"
-            blocks: ${{ steps.generate_blocks.outputs.slack_blocks }}
+      # - name: Send Slack Notification
+      #   if: steps.process_results.outputs.vulnerabilities_found == 'true'
+      #   uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+      #   with:
+      #     method: chat.postMessage
+      #     token: ${{ secrets.QBOT_SLACK_TOKEN }}
+      #     payload: |
+      #       channel: ${{ env.SLACK_CHANNEL_ID }}
+      #       text: "🚨 Trivy Scan: ${{ steps.process_results.outputs.critical_count }} Critical, ${{ steps.process_results.outputs.high_count }} High, ${{ steps.process_results.outputs.medium_count }} Medium, ${{ steps.process_results.outputs.low_count }} Low vulnerabilities found in ${{ inputs.image_ref }}"
+      #       blocks: ${{ steps.generate_blocks.outputs.slack_blocks }}
