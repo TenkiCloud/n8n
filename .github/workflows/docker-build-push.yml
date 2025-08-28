@@ -435,6 +435,9 @@ jobs:
   security-scan:
     name: Security Scan
     needs: [determine-build-context, build-and-push-docker]
+    permissions:
+      contents: read
+      actions: read
     # if: |
     #   success() &&
     #   (needs.determine-build-context.outputs.release_type == 'stable' ||
