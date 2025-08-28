@@ -13,9 +13,9 @@ on:
         type: string
         description: 'Full image reference to scan e.g. ghcr.io/n8n-io/n8n:latest'
         required: true
-    secrets:
-      QBOT_SLACK_TOKEN:
-        required: true
+    # secrets:
+    #   QBOT_SLACK_TOKEN:
+    #     required: true
 
 permissions:
   contents: read

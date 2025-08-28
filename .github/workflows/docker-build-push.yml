@@ -296,6 +296,7 @@ jobs:
           provenance: true
           sbom: true
           push: false
+          load: true
           tags: ${{ steps.determine-tags.outputs.tags }}
 
   # create_multi_arch_manifest:
