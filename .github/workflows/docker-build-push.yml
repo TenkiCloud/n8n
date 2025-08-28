@@ -48,7 +48,7 @@ on:
 jobs:
   determine-build-context:
     name: Determine Build Context
-    runs-on: tenki-standard-medium-4c-8g
+    runs-on: tenki-standard-large-8c-16g
     outputs:
       release_type: ${{ steps.context.outputs.release_type }}
       n8n_version: ${{ steps.context.outputs.n8n_version }}
@@ -129,7 +129,7 @@ jobs:
               "platform": ["amd64"],
               "include": [{
                 "platform": "amd64",
-                "runner": "tenki-standard-medium-4c-8g",
+                "runner": "tenki-standard-large-8c-16g",
                 "docker_platform": "linux/amd64"
               }]
             }'
@@ -139,7 +139,7 @@ jobs:
             #   "platform": ["amd64", "arm64"],
             #   "include": [{
             #     "platform": "amd64",
-            #     "runner": "tenki-standard-medium-4c-8g",
+            #     "runner": "tenki-standard-large-8c-16g",
             #     "docker_platform": "linux/amd64"
             #   }, {
             #     "platform": "arm64",
@@ -153,7 +153,7 @@ jobs:
               "platform": ["amd64"],
               "include": [{
                 "platform": "amd64",
-                "runner": "tenki-standard-medium-4c-8g",
+                "runner": "tenki-standard-large-8c-16g",
                 "docker_platform": "linux/amd64"
               }]
             }'
@@ -327,7 +327,7 @@ jobs:
   # create_multi_arch_manifest:
   #   name: Create Multi-Arch Manifest
   #   needs: [determine-build-context, build-and-push-docker]
-  #   runs-on: tenki-standard-medium-4c-8g
+  #   runs-on: tenki-standard-large-8c-16g
   #   # if: |
   #   #   needs.build-and-push-docker.result == 'success' &&
   #   #   needs.determine-build-context.outputs.push_enabled == 'true'
@@ -420,7 +420,7 @@ jobs:
   # call-success-url:
   #   name: Call Success URL
   #   needs: [create_multi_arch_manifest]
-  #   runs-on: tenki-standard-medium-4c-8g
+  #   runs-on: tenki-standard-large-8c-16g
   #   if: needs.create_multi_arch_manifest.result == 'success' || needs.create_multi_arch_manifest.result == 'skipped'
   #   steps:
   #     - name: Call Success URL
