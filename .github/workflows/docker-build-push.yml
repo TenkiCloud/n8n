@@ -10,9 +10,6 @@ env:
   NODE_OPTIONS: '--max-old-space-size=7168'
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
-
   workflow_call:
     inputs:
       n8n_version:
@@ -44,16 +41,14 @@ on:
 
   pull_request:
     types:
+      - synchronize
       - opened
-      - ready_for_review
-    paths:
-      - '.github/workflows/docker-build-push.yml'
-      - 'docker/images/n8n/Dockerfile'
+      - edited
 
 jobs:
   determine-build-context:
     name: Determine Build Context
-    runs-on: ubuntu-latest
+    runs-on: tenki-standard-large-plus-16c-32g
     outputs:
       release_type: ${{ steps.context.outputs.release_type }}
       n8n_version: ${{ steps.context.outputs.n8n_version }}
@@ -134,22 +129,32 @@ jobs:
               "platform": ["amd64"],
               "include": [{
                 "platform": "amd64",
-                "runner": "blacksmith-4vcpu-ubuntu-2204",
+                "runner": "tenki-standard-large-plus-16c-32g",
                 "docker_platform": "linux/amd64"
               }]
             }'
           else
             # All other builds (stable, nightly, dev, PR) need both platforms
+            # MATRIX='{
+            #   "platform": ["amd64", "arm64"],
+            #   "include": [{
+            #     "platform": "amd64",
+            #     "runner": "tenki-standard-large-plus-16c-32g",
+            #     "docker_platform": "linux/amd64"
+            #   }, {
+            #     "platform": "arm64",
+            #     "runner": "blacksmith-4vcpu-ubuntu-2204-arm",
+            #     "docker_platform": "linux/arm64"
+            #   }]
+            # }'
+
+            # Temporary: only build AMD64 (same as branch build)
             MATRIX='{
-              "platform": ["amd64", "arm64"],
+              "platform": ["amd64"],
               "include": [{
                 "platform": "amd64",
-                "runner": "blacksmith-4vcpu-ubuntu-2204",
+                "runner": "tenki-standard-large-plus-16c-32g",
                 "docker_platform": "linux/amd64"
-              }, {
-                "platform": "arm64",
-                "runner": "blacksmith-4vcpu-ubuntu-2204-arm",
-                "docker_platform": "linux/arm64"
               }]
             }'
           fi
@@ -162,12 +167,14 @@ jobs:
     name: Build App, then Build and Push Docker Image (${{ matrix.platform }})
     needs: determine-build-context
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
+    # timeout-minutes: 15
     strategy:
       matrix: ${{ fromJSON(needs.determine-build-context.outputs.build_matrix) }}
     outputs:
       image_ref: ${{ steps.determine-tags.outputs.primary_ghcr_manifest_tag }}
       primary_ghcr_manifest_tag: ${{ steps.determine-tags.outputs.primary_ghcr_manifest_tag }}
+      image_artifact: ${{ steps.artifact-meta.outputs.name }}
+      image_tar: ${{ steps.artifact-meta.outputs.tar }}
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -184,7 +191,7 @@ jobs:
         run: |
           RELEASE_TYPE="${{ needs.determine-build-context.outputs.release_type }}"
           N8N_VERSION_TAG="${{ needs.determine-build-context.outputs.n8n_version }}"
-          GHCR_BASE="ghcr.io/${{ github.repository_owner }}/n8n"
+          GHCR_BASE="ghcr.io/tenkicloud/n8n"
           DOCKER_BASE="${{ secrets.DOCKER_USERNAME }}/n8n"
           PLATFORM="${{ matrix.platform }}"
 
@@ -263,23 +270,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
-      - name: Login to GitHub Container Registry
-        if: needs.determine-build-context.outputs.push_enabled == 'true'
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Login to GitHub Container Registry
+      #   if: needs.determine-build-context.outputs.push_enabled == 'true'
+      #   uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to DockerHub
-        if: needs.determine-build-context.outputs.push_enabled == 'true' && steps.determine-tags.outputs.dockerhub_platform_tag != ''
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+      # - name: Login to DockerHub
+      #   if: needs.determine-build-context.outputs.push_enabled == 'true' && steps.determine-tags.outputs.dockerhub_platform_tag != ''
+      #   uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      #   with:
+      #     username: ${{ secrets.DOCKER_USERNAME }}
+      #     password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker image
-        uses: useblacksmith/build-push-action@574eb0ee0b59c6a687ace24192f0727dfb65d6d7 # v1.2
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./docker/images/n8n/Dockerfile
@@ -288,127 +295,157 @@ jobs:
             N8N_VERSION=${{ needs.determine-build-context.outputs.n8n_version }}
             N8N_RELEASE_TYPE=${{ needs.determine-build-context.outputs.release_type }}
           platforms: ${{ matrix.docker_platform }}
-          provenance: true
-          sbom: true
-          push: ${{ needs.determine-build-context.outputs.push_enabled == 'true' }}
-          tags: ${{ steps.determine-tags.outputs.tags }}
+          provenance: false
+          sbom: false
+          push: false
+          load: true
+          tags: ${{ steps.determine-tags.outputs.ghcr_platform_tag }}
 
-  create_multi_arch_manifest:
-    name: Create Multi-Arch Manifest
-    needs: [determine-build-context, build-and-push-docker]
-    runs-on: ubuntu-latest
-    if: |
-      needs.build-and-push-docker.result == 'success' &&
-      needs.determine-build-context.outputs.push_enabled == 'true'
-    steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Tag local image with simple name
+        run: |
+          docker tag "${{ steps.determine-tags.outputs.ghcr_platform_tag }}" "n8n:local-${{ matrix.platform }}"
+          docker images
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      - name: Save image as tar
+        run: |
+          docker save "n8n:local-${{ matrix.platform }}" -o "image-${{ matrix.platform }}.tar"
+          ls -lh "image-${{ matrix.platform }}.tar"
+
+      - name: Upload image tar as artifact
+        uses: actions/upload-artifact@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          name: n8n-image-${{ matrix.platform }}
+          path: image-${{ matrix.platform }}.tar
+          retention-days: 5
 
-      - name: Determine Docker Hub manifest tag
-        id: dockerhub_check
+      - name: Expose artifact metadata
+        id: artifact-meta
         run: |
-          RELEASE_TYPE="${{ needs.determine-build-context.outputs.release_type }}"
-          N8N_VERSION="${{ needs.determine-build-context.outputs.n8n_version }}"
-          DOCKER_BASE="${{ secrets.DOCKER_USERNAME }}/n8n"
+          echo "name=n8n-image-${{ matrix.platform }}" >> "$GITHUB_OUTPUT"
+          echo "tar=image-${{ matrix.platform }}.tar" >> "$GITHUB_OUTPUT"
 
-          # Determine if Docker Hub manifest is needed and construct the tag
-          case "$RELEASE_TYPE" in
-            "stable")
-              {
-                echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:${N8N_VERSION}"
-                echo "CREATE_DOCKERHUB_MANIFEST=true"
-              } >> "$GITHUB_OUTPUT"
-              ;;
-            "nightly")
-              {
-                echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:nightly"
-                echo "CREATE_DOCKERHUB_MANIFEST=true"
-              } >> "$GITHUB_OUTPUT"
-              ;;
-            "dev")
-              if [[ "$N8N_VERSION" != pr-* ]]; then
-                {
-                  echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:dev"
-                  echo "CREATE_DOCKERHUB_MANIFEST=true"
-                } >> "$GITHUB_OUTPUT"
-              else
-                echo "CREATE_DOCKERHUB_MANIFEST=false" >> "$GITHUB_OUTPUT"
-              fi
-              ;;
-            *)
-              echo "CREATE_DOCKERHUB_MANIFEST=false" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
+  # create_multi_arch_manifest:
+  #   name: Create Multi-Arch Manifest
+  #   needs: [determine-build-context, build-and-push-docker]
+  #   runs-on: tenki-standard-large-plus-16c-32g
+  #   # if: |
+  #   #   needs.build-and-push-docker.result == 'success' &&
+  #   #   needs.determine-build-context.outputs.push_enabled == 'true'
+  #   steps:
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
-      - name: Login to Docker Hub
-        if: steps.dockerhub_check.outputs.CREATE_DOCKERHUB_MANIFEST == 'true'
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+  #     - name: Login to GitHub Container Registry
+  #       uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+  #       with:
+  #         registry: ghcr.io
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create GHCR multi-arch manifest
-        if: needs.build-and-push-docker.outputs.primary_ghcr_manifest_tag != ''
-        run: |
-          MANIFEST_TAG="${{ needs.build-and-push-docker.outputs.primary_ghcr_manifest_tag }}"
-          RELEASE_TYPE="${{ needs.determine-build-context.outputs.release_type }}"
+  #     - name: Determine Docker Hub manifest tag
+  #       id: dockerhub_check
+  #       run: |
+  #         RELEASE_TYPE="${{ needs.determine-build-context.outputs.release_type }}"
+  #         N8N_VERSION="${{ needs.determine-build-context.outputs.n8n_version }}"
+  #         DOCKER_BASE="${{ secrets.DOCKER_USERNAME }}/n8n"
 
-          echo "Creating GHCR manifest: $MANIFEST_TAG"
+  #         # Determine if Docker Hub manifest is needed and construct the tag
+  #         case "$RELEASE_TYPE" in
+  #           "stable")
+  #             {
+  #               echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:${N8N_VERSION}"
+  #               echo "CREATE_DOCKERHUB_MANIFEST=true"
+  #             } >> "$GITHUB_OUTPUT"
+  #             ;;
+  #           "nightly")
+  #             {
+  #               echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:nightly"
+  #               echo "CREATE_DOCKERHUB_MANIFEST=true"
+  #             } >> "$GITHUB_OUTPUT"
+  #             ;;
+  #           "dev")
+  #             if [[ "$N8N_VERSION" != pr-* ]]; then
+  #               {
+  #                 echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:dev"
+  #                 echo "CREATE_DOCKERHUB_MANIFEST=true"
+  #               } >> "$GITHUB_OUTPUT"
+  #             else
+  #               echo "CREATE_DOCKERHUB_MANIFEST=false" >> "$GITHUB_OUTPUT"
+  #             fi
+  #             ;;
+  #           *)
+  #             echo "CREATE_DOCKERHUB_MANIFEST=false" >> "$GITHUB_OUTPUT"
+  #             ;;
+  #         esac
 
-          # For branch builds, only AMD64 is built
-          if [[ "$RELEASE_TYPE" == "branch" ]]; then
-            docker buildx imagetools create \
-              --tag $MANIFEST_TAG \
-              ${MANIFEST_TAG}-amd64
-          else
-            docker buildx imagetools create \
-              --tag $MANIFEST_TAG \
-              ${MANIFEST_TAG}-amd64 \
-              ${MANIFEST_TAG}-arm64
-          fi
+  #     # - name: Login to Docker Hub
+  #     #   if: steps.dockerhub_check.outputs.CREATE_DOCKERHUB_MANIFEST == 'true'
+  #     #   uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+  #     #   with:
+  #     #     username: ${{ secrets.DOCKER_USERNAME }}
+  #     #     password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Create Docker Hub multi-arch manifest
-        if: steps.dockerhub_check.outputs.CREATE_DOCKERHUB_MANIFEST == 'true'
-        run: |
-          MANIFEST_TAG="${{ steps.dockerhub_check.outputs.DOCKER_MANIFEST_TAG }}"
+  #     - name: Create GHCR multi-arch manifest
+  #       if: needs.build-and-push-docker.outputs.primary_ghcr_manifest_tag != ''
+  #       run: |
+  #         MANIFEST_TAG="${{ needs.build-and-push-docker.outputs.primary_ghcr_manifest_tag }}"
+  #         RELEASE_TYPE="${{ needs.determine-build-context.outputs.release_type }}"
 
-          echo "Creating Docker Hub manifest: $MANIFEST_TAG"
+  #         echo "Creating GHCR manifest: $MANIFEST_TAG"
 
-          docker buildx imagetools create \
-            --tag $MANIFEST_TAG \
-            ${MANIFEST_TAG}-amd64 \
-            ${MANIFEST_TAG}-arm64
+  #         # For branch builds, only AMD64 is built
+  #         if [[ "$RELEASE_TYPE" == "branch" ]]; then
+  #           docker buildx imagetools create \
+  #             --tag $MANIFEST_TAG \
+  #             ${MANIFEST_TAG}-amd64
+  #         else
+  #           docker buildx imagetools create \
+  #             --tag $MANIFEST_TAG \
+  #             ${MANIFEST_TAG}-amd64 \
+  #             ${MANIFEST_TAG}-arm64
+  #         fi
 
-  call-success-url:
-    name: Call Success URL
-    needs: [create_multi_arch_manifest]
-    runs-on: ubuntu-latest
-    if: needs.create_multi_arch_manifest.result == 'success' || needs.create_multi_arch_manifest.result == 'skipped'
-    steps:
-      - name: Call Success URL
-        env:
-          SUCCESS_URL: ${{ github.event.inputs.success_url }}
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.success_url != '' }}
-        run: |
-          echo "Calling success URL: ${{ env.SUCCESS_URL }}"
-          curl -v "${{ env.SUCCESS_URL }}" || echo "Failed to call success URL"
-        shell: bash
+  #     - name: Create Docker Hub multi-arch manifest
+  #       if: steps.dockerhub_check.outputs.CREATE_DOCKERHUB_MANIFEST == 'true'
+  #       run: |
+  #         MANIFEST_TAG="${{ steps.dockerhub_check.outputs.DOCKER_MANIFEST_TAG }}"
+
+  #         echo "Creating Docker Hub manifest: $MANIFEST_TAG"
+
+  #         docker buildx imagetools create \
+  #           --tag $MANIFEST_TAG \
+  #           ${MANIFEST_TAG}-amd64 \
+  #           ${MANIFEST_TAG}-arm64
+
+  # call-success-url:
+  #   name: Call Success URL
+  #   needs: [create_multi_arch_manifest]
+  #   runs-on: tenki-standard-large-plus-16c-32g
+  #   if: needs.create_multi_arch_manifest.result == 'success' || needs.create_multi_arch_manifest.result == 'skipped'
+  #   steps:
+  #     - name: Call Success URL
+  #       env:
+  #         SUCCESS_URL: ${{ github.event.inputs.success_url }}
+  #       if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.success_url != '' }}
+  #       run: |
+  #         echo "Calling success URL: ${{ env.SUCCESS_URL }}"
+  #         curl -v "${{ env.SUCCESS_URL }}" || echo "Failed to call success URL"
+  #       shell: bash
 
   security-scan:
     name: Security Scan
     needs: [determine-build-context, build-and-push-docker]
-    if: |
-      success() &&
-      (needs.determine-build-context.outputs.release_type == 'stable' ||
-       needs.determine-build-context.outputs.release_type == 'nightly')
+    permissions:
+      contents: read
+      actions: read
+    # if: |
+    #   success() &&
+    #   (needs.determine-build-context.outputs.release_type == 'stable' ||
+    #    needs.determine-build-context.outputs.release_type == 'nightly')
     uses: ./.github/workflows/security-trivy-scan-callable.yml
     with:
-      image_ref: ${{ needs.build-and-push-docker.outputs.image_ref }}
+      # image_ref: ${{ needs.build-and-push-docker.outputs.image_ref }}
+      input_tar_artifact: ${{ needs.build-and-push-docker.outputs.image_artifact }}
+      input_tar_filename: ${{ needs.build-and-push-docker.outputs.image_tar }}
+      artifact_run_id: ${{ github.run_id }}
     secrets: inherit

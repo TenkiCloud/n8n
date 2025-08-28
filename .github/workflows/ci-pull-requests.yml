@@ -4,12 +4,13 @@ on:
   pull_request:
     branches:
       - '**'
-      - '!release/*'
+
+# dummy change to trigger workflow
 
 jobs:
   install-and-build:
     name: Install & Build
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     env:
       NODE_OPTIONS: '--max-old-space-size=3072'
     outputs:

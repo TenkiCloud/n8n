@@ -5,35 +5,59 @@ on:
     inputs:
       image_ref:
         description: 'Full image reference to scan e.g. ghcr.io/n8n-io/n8n:latest'
-        required: true
+        required: false
         default: 'ghcr.io/n8n-io/n8n:latest'
   workflow_call:
     inputs:
       image_ref:
         type: string
         description: 'Full image reference to scan e.g. ghcr.io/n8n-io/n8n:latest'
+        required: false
+      input_tar_artifact:
+        type: string
+        description: 'Artifact name that contains a saved image tar (from docker save)'
+        required: false
+        default: ''
+      input_tar_filename:
+        type: string
+        description: 'Filename of the tar inside the artifact'
+        required: false
+        default: 'image-amd64.tar'
+      artifact_run_id:
+        type: string
+        description: 'Caller workflow run ID that produced the artifact'
         required: true
-    secrets:
-      QBOT_SLACK_TOKEN:
-        required: true
+    # secrets:
+    #   QBOT_SLACK_TOKEN:
+    #     required: true
 
 permissions:
   contents: read
+  actions: read
 
-env:
-  QBOT_SLACK_TOKEN: ${{ secrets.QBOT_SLACK_TOKEN }}
-  SLACK_CHANNEL_ID: C042WDXPTEZ #mission-security
+# env:
+#   QBOT_SLACK_TOKEN: ${{ secrets.QBOT_SLACK_TOKEN }}
+#   SLACK_CHANNEL_ID: C042WDXPTEZ #mission-security
 
 jobs:
   security_scan:
     name: Security - Scan Docker Image With Trivy
-    runs-on: ubuntu-latest
+    runs-on: tenki-standard-large-plus-16c-32g
     steps:
+      - name: Download image tar artifact (from caller run)
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.input_tar_artifact }}
+          path: ./_image
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.artifact_run_id }}
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
         id: trivy_scan
         with:
-          image-ref: ${{ inputs.image_ref }}
+          # image-ref: ${{ inputs.image_ref }}
+          input: ./_image/${{ inputs.input_tar_filename }}
           format: 'json'
           output: 'trivy-results.json'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
@@ -225,13 +249,14 @@ jobs:
 
           echo "slack_blocks=$BLOCKS_JSON" >> "$GITHUB_OUTPUT"
 
-      - name: Send Slack Notification
-        if: steps.process_results.outputs.vulnerabilities_found == 'true'
-        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.QBOT_SLACK_TOKEN }}
-          payload: |
-            channel: ${{ env.SLACK_CHANNEL_ID }}
-            text: "🚨 Trivy Scan: ${{ steps.process_results.outputs.critical_count }} Critical, ${{ steps.process_results.outputs.high_count }} High, ${{ steps.process_results.outputs.medium_count }} Medium, ${{ steps.process_results.outputs.low_count }} Low vulnerabilities found in ${{ inputs.image_ref }}"
-            blocks: ${{ steps.generate_blocks.outputs.slack_blocks }}
+      # - name: Send Slack Notification
+      #   if: steps.process_results.outputs.vulnerabilities_found == 'true'
+      #   uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+      #   with:
+      #     method: chat.postMessage
+      #     token: ${{ secrets.QBOT_SLACK_TOKEN }}
+      #     payload: |
+      #       channel: ${{ env.SLACK_CHANNEL_ID }}
+      #       text: "🚨 Trivy Scan: ${{ steps.process_results.outputs.critical_count }} Critical, ${{ steps.process_results.outputs.high_count }} High, ${{ steps.process_results.outputs.medium_count }} Medium, ${{ steps.process_results.outputs.low_count }} Low vulnerabilities found in ${{ inputs.image_ref }}"
+      #       blocks: ${{ steps.generate_blocks.outputs.slack_blocks }}
+      
