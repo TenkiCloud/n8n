@@ -298,113 +298,113 @@ jobs:
           push: false
           tags: ${{ steps.determine-tags.outputs.tags }}
 
-  create_multi_arch_manifest:
-    name: Create Multi-Arch Manifest
-    needs: [determine-build-context, build-and-push-docker]
-    runs-on: ubuntu-latest
-    # if: |
-    #   needs.build-and-push-docker.result == 'success' &&
-    #   needs.determine-build-context.outputs.push_enabled == 'true'
-    steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+  # create_multi_arch_manifest:
+  #   name: Create Multi-Arch Manifest
+  #   needs: [determine-build-context, build-and-push-docker]
+  #   runs-on: ubuntu-latest
+  #   # if: |
+  #   #   needs.build-and-push-docker.result == 'success' &&
+  #   #   needs.determine-build-context.outputs.push_enabled == 'true'
+  #   steps:
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Login to GitHub Container Registry
+  #       uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+  #       with:
+  #         registry: ghcr.io
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Determine Docker Hub manifest tag
-        id: dockerhub_check
-        run: |
-          RELEASE_TYPE="${{ needs.determine-build-context.outputs.release_type }}"
-          N8N_VERSION="${{ needs.determine-build-context.outputs.n8n_version }}"
-          DOCKER_BASE="${{ secrets.DOCKER_USERNAME }}/n8n"
+  #     - name: Determine Docker Hub manifest tag
+  #       id: dockerhub_check
+  #       run: |
+  #         RELEASE_TYPE="${{ needs.determine-build-context.outputs.release_type }}"
+  #         N8N_VERSION="${{ needs.determine-build-context.outputs.n8n_version }}"
+  #         DOCKER_BASE="${{ secrets.DOCKER_USERNAME }}/n8n"
 
-          # Determine if Docker Hub manifest is needed and construct the tag
-          case "$RELEASE_TYPE" in
-            "stable")
-              {
-                echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:${N8N_VERSION}"
-                echo "CREATE_DOCKERHUB_MANIFEST=true"
-              } >> "$GITHUB_OUTPUT"
-              ;;
-            "nightly")
-              {
-                echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:nightly"
-                echo "CREATE_DOCKERHUB_MANIFEST=true"
-              } >> "$GITHUB_OUTPUT"
-              ;;
-            "dev")
-              if [[ "$N8N_VERSION" != pr-* ]]; then
-                {
-                  echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:dev"
-                  echo "CREATE_DOCKERHUB_MANIFEST=true"
-                } >> "$GITHUB_OUTPUT"
-              else
-                echo "CREATE_DOCKERHUB_MANIFEST=false" >> "$GITHUB_OUTPUT"
-              fi
-              ;;
-            *)
-              echo "CREATE_DOCKERHUB_MANIFEST=false" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
+  #         # Determine if Docker Hub manifest is needed and construct the tag
+  #         case "$RELEASE_TYPE" in
+  #           "stable")
+  #             {
+  #               echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:${N8N_VERSION}"
+  #               echo "CREATE_DOCKERHUB_MANIFEST=true"
+  #             } >> "$GITHUB_OUTPUT"
+  #             ;;
+  #           "nightly")
+  #             {
+  #               echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:nightly"
+  #               echo "CREATE_DOCKERHUB_MANIFEST=true"
+  #             } >> "$GITHUB_OUTPUT"
+  #             ;;
+  #           "dev")
+  #             if [[ "$N8N_VERSION" != pr-* ]]; then
+  #               {
+  #                 echo "DOCKER_MANIFEST_TAG=${DOCKER_BASE}:dev"
+  #                 echo "CREATE_DOCKERHUB_MANIFEST=true"
+  #               } >> "$GITHUB_OUTPUT"
+  #             else
+  #               echo "CREATE_DOCKERHUB_MANIFEST=false" >> "$GITHUB_OUTPUT"
+  #             fi
+  #             ;;
+  #           *)
+  #             echo "CREATE_DOCKERHUB_MANIFEST=false" >> "$GITHUB_OUTPUT"
+  #             ;;
+  #         esac
 
-      # - name: Login to Docker Hub
-      #   if: steps.dockerhub_check.outputs.CREATE_DOCKERHUB_MANIFEST == 'true'
-      #   uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-      #   with:
-      #     username: ${{ secrets.DOCKER_USERNAME }}
-      #     password: ${{ secrets.DOCKER_PASSWORD }}
+  #     # - name: Login to Docker Hub
+  #     #   if: steps.dockerhub_check.outputs.CREATE_DOCKERHUB_MANIFEST == 'true'
+  #     #   uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+  #     #   with:
+  #     #     username: ${{ secrets.DOCKER_USERNAME }}
+  #     #     password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Create GHCR multi-arch manifest
-        if: needs.build-and-push-docker.outputs.primary_ghcr_manifest_tag != ''
-        run: |
-          MANIFEST_TAG="${{ needs.build-and-push-docker.outputs.primary_ghcr_manifest_tag }}"
-          RELEASE_TYPE="${{ needs.determine-build-context.outputs.release_type }}"
+  #     - name: Create GHCR multi-arch manifest
+  #       if: needs.build-and-push-docker.outputs.primary_ghcr_manifest_tag != ''
+  #       run: |
+  #         MANIFEST_TAG="${{ needs.build-and-push-docker.outputs.primary_ghcr_manifest_tag }}"
+  #         RELEASE_TYPE="${{ needs.determine-build-context.outputs.release_type }}"
 
-          echo "Creating GHCR manifest: $MANIFEST_TAG"
+  #         echo "Creating GHCR manifest: $MANIFEST_TAG"
 
-          # For branch builds, only AMD64 is built
-          if [[ "$RELEASE_TYPE" == "branch" ]]; then
-            docker buildx imagetools create \
-              --tag $MANIFEST_TAG \
-              ${MANIFEST_TAG}-amd64
-          else
-            docker buildx imagetools create \
-              --tag $MANIFEST_TAG \
-              ${MANIFEST_TAG}-amd64 \
-              ${MANIFEST_TAG}-arm64
-          fi
+  #         # For branch builds, only AMD64 is built
+  #         if [[ "$RELEASE_TYPE" == "branch" ]]; then
+  #           docker buildx imagetools create \
+  #             --tag $MANIFEST_TAG \
+  #             ${MANIFEST_TAG}-amd64
+  #         else
+  #           docker buildx imagetools create \
+  #             --tag $MANIFEST_TAG \
+  #             ${MANIFEST_TAG}-amd64 \
+  #             ${MANIFEST_TAG}-arm64
+  #         fi
 
-      - name: Create Docker Hub multi-arch manifest
-        if: steps.dockerhub_check.outputs.CREATE_DOCKERHUB_MANIFEST == 'true'
-        run: |
-          MANIFEST_TAG="${{ steps.dockerhub_check.outputs.DOCKER_MANIFEST_TAG }}"
+  #     - name: Create Docker Hub multi-arch manifest
+  #       if: steps.dockerhub_check.outputs.CREATE_DOCKERHUB_MANIFEST == 'true'
+  #       run: |
+  #         MANIFEST_TAG="${{ steps.dockerhub_check.outputs.DOCKER_MANIFEST_TAG }}"
 
-          echo "Creating Docker Hub manifest: $MANIFEST_TAG"
+  #         echo "Creating Docker Hub manifest: $MANIFEST_TAG"
 
-          docker buildx imagetools create \
-            --tag $MANIFEST_TAG \
-            ${MANIFEST_TAG}-amd64 \
-            ${MANIFEST_TAG}-arm64
+  #         docker buildx imagetools create \
+  #           --tag $MANIFEST_TAG \
+  #           ${MANIFEST_TAG}-amd64 \
+  #           ${MANIFEST_TAG}-arm64
 
-  call-success-url:
-    name: Call Success URL
-    needs: [create_multi_arch_manifest]
-    runs-on: ubuntu-latest
-    if: needs.create_multi_arch_manifest.result == 'success' || needs.create_multi_arch_manifest.result == 'skipped'
-    steps:
-      - name: Call Success URL
-        env:
-          SUCCESS_URL: ${{ github.event.inputs.success_url }}
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.success_url != '' }}
-        run: |
-          echo "Calling success URL: ${{ env.SUCCESS_URL }}"
-          curl -v "${{ env.SUCCESS_URL }}" || echo "Failed to call success URL"
-        shell: bash
+  # call-success-url:
+  #   name: Call Success URL
+  #   needs: [create_multi_arch_manifest]
+  #   runs-on: ubuntu-latest
+  #   if: needs.create_multi_arch_manifest.result == 'success' || needs.create_multi_arch_manifest.result == 'skipped'
+  #   steps:
+  #     - name: Call Success URL
+  #       env:
+  #         SUCCESS_URL: ${{ github.event.inputs.success_url }}
+  #       if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.success_url != '' }}
+  #       run: |
+  #         echo "Calling success URL: ${{ env.SUCCESS_URL }}"
+  #         curl -v "${{ env.SUCCESS_URL }}" || echo "Failed to call success URL"
+  #       shell: bash
 
   security-scan:
     name: Security Scan
