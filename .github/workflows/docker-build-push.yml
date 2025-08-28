@@ -173,6 +173,8 @@ jobs:
     outputs:
       image_ref: ${{ steps.determine-tags.outputs.primary_ghcr_manifest_tag }}
       primary_ghcr_manifest_tag: ${{ steps.determine-tags.outputs.primary_ghcr_manifest_tag }}
+      image_artifact: ${{ steps.artifact-meta.outputs.name }}
+      image_tar: ${{ steps.artifact-meta.outputs.tar }}
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -293,11 +295,34 @@ jobs:
             N8N_VERSION=${{ needs.determine-build-context.outputs.n8n_version }}
             N8N_RELEASE_TYPE=${{ needs.determine-build-context.outputs.release_type }}
           platforms: ${{ matrix.docker_platform }}
-          provenance: true
-          sbom: true
+          provenance: false
+          sbom: false
           push: false
           load: true
-          tags: ${{ steps.determine-tags.outputs.tags }}
+          tags: ${{ steps.determine-tags.outputs.ghcr_platform_tag }}
+
+      - name: Tag local image with simple name
+        run: |
+          docker tag "${{ steps.determine-tags.outputs.ghcr_platform_tag }}" "n8n:local-${{ matrix.platform }}"
+          docker images
+
+      - name: Save image as tar
+        run: |
+          docker save "n8n:local-${{ matrix.platform }}" -o "image-${{ matrix.platform }}.tar"
+          ls -lh "image-${{ matrix.platform }}.tar"
+
+      - name: Upload image tar as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n8n-image-${{ matrix.platform }}
+          path: image-${{ matrix.platform }}.tar
+          retention-days: 5
+
+      - name: Expose artifact metadata
+        id: artifact-meta
+        run: |
+          echo "name=n8n-image-${{ matrix.platform }}" >> "$GITHUB_OUTPUT"
+          echo "tar=image-${{ matrix.platform }}.tar" >> "$GITHUB_OUTPUT"
 
   # create_multi_arch_manifest:
   #   name: Create Multi-Arch Manifest
@@ -416,5 +441,8 @@ jobs:
     #    needs.determine-build-context.outputs.release_type == 'nightly')
     uses: ./.github/workflows/security-trivy-scan-callable.yml
     with:
-      image_ref: ${{ needs.build-and-push-docker.outputs.image_ref }}
+      # image_ref: ${{ needs.build-and-push-docker.outputs.image_ref }}
+      input_tar_artifact: ${{ needs.build-and-push-docker.outputs.image_artifact }}
+      input_tar_filename: ${{ needs.build-and-push-docker.outputs.image_tar }}
+      artifact_run_id: ${{ github.run_id }}
     secrets: inherit
