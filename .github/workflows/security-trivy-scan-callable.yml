@@ -42,7 +42,7 @@ permissions:
 jobs:
   security_scan:
     name: Security - Scan Docker Image With Trivy
-    runs-on: tenki-standard-large-8c-16g
+    runs-on: tenki-standard-large-plus-16c-32g
     steps:
       - name: Download image tar artifact (from caller run)
         uses: actions/download-artifact@v4
